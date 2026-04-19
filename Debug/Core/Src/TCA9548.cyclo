@@ -1,0 +1,7 @@
+../Core/Src/TCA9548.c:9:19:TCA9548_Init	2
+../Core/Src/TCA9548.c:17:6:TCA9548_IsConnected	1
+../Core/Src/TCA9548.c:24:19:TCA9548_SelectChannel	2
+../Core/Src/TCA9548.c:32:19:TCA9548_DisableChannel	2
+../Core/Src/TCA9548.c:40:19:TCA9548_DisableAllChannels	1
+../Core/Src/TCA9548.c:45:19:TCA9548_SetChannelMask	2
+../Core/Src/TCA9548.c:54:9:TCA9548_GetChannelMask	2

@@ -1,0 +1,17 @@
+../Core/Src/NAU7802.c:4:13:NAU7802_WriteReg	32	static
+../Core/Src/NAU7802.c:8:13:NAU7802_ReadReg	40	static
+../Core/Src/NAU7802.c:12:13:NAU7802_SetBit	24	static
+../Core/Src/NAU7802.c:19:13:NAU7802_ClearBit	24	static
+../Core/Src/NAU7802.c:26:13:NAU7802_ModifyBits	24	static
+../Core/Src/NAU7802.c:36:6:NAU7802_Reset	24	static
+../Core/Src/NAU7802.c:48:6:NAU7802_Enable	24	static
+../Core/Src/NAU7802.c:64:6:NAU7802_Init	32	static
+../Core/Src/NAU7802.c:86:6:NAU7802_Available	24	static
+../Core/Src/NAU7802.c:92:9:NAU7802_Read	40	static
+../Core/Src/NAU7802.c:105:6:NAU7802_SetLDO	24	static
+../Core/Src/NAU7802.c:113:6:NAU7802_SetGain	24	static
+../Core/Src/NAU7802.c:117:6:NAU7802_SetRate	24	static
+../Core/Src/NAU7802.c:121:6:NAU7802_Calibrate	32	static
+../Core/Src/NAU7802.c:137:6:NAU7802_Tare	56	static
+../Core/Src/NAU7802.c:153:7:NAU7802_CalculateWeight	16	static
+../Core/Src/NAU7802.c:157:6:NAU7802_CalibrateFactor	64	static
