@@ -1,3 +1,4 @@
+"./Core/Src/INA228.o"
 "./Core/Src/NAU7802.o"
 "./Core/Src/TCA9548.o"
 "./Core/Src/main.o"

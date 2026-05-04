@@ -6,13 +6,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
-#include "TCA9548.h"
-#include "NAU7802.h"
+#include "ina228.h"
+#include "usbd_cdc_if.h"  // USB CDC üzerinden veri göndermek için gerekli başlık
 #include <stdio.h>
 #include <string.h>
-#include "usbd_cdc_if.h"
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -29,14 +26,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 SPI_HandleTypeDef hspi1;
 
 /* USER CODE BEGIN PV */
-
-int32_t channel0_value = 0;
-char usb_buf[128];                    // USB üzerinden göndereceğimiz metin tamponu
-NAU7802_Sensor loadcell_0 = {&hi2c1, 0,0};
+INA228_HandleTypeDef powerSensor;
+char usb_buffer[128]; // USB üzerinden gönderilecek metni tutacak tampon bellek
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -44,6 +40,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_I2C2_Init(void);
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
@@ -80,89 +77,53 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_SPI1_Init();
   MX_I2C1_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
-  // 1. TCA9548'i başlat
-  if (TCA9548_Init(&hi2c1, 0x00) == HAL_OK) {
-        TCA9548_SelectChannel(&hi2c1, 1);
-        HAL_Delay(50);
+  // Thrust Logger sensörü başlatılıyor. (Adresin 0x40 olduğunu varsayıyoruz)
+    INA228_Init(&powerSensor, &hi2c2, 0x40);
 
-        if (NAU7802_Init(&hi2c1)) {
-            // --- AŞAMA 1: BOŞKEN DARA ALMA ---
+    // USB bağlantısının bilgisayar tarafından tanınması için kısa bir bekleme
+    HAL_Delay(1000);
 
-            for(int i=10; i>0; i--) {
-         int    len = sprintf(usb_buf, "Kalan Sure: %d saniye\r\n", i);
-                CDC_Transmit_FS((uint8_t*)usb_buf, len);
-                HAL_GPIO_TogglePin(USER_LED_GPIO_Port, USER_LED_Pin);
-                HAL_Delay(1000);
-            }
+    if (INA228_Begin(&powerSensor)) {
+        // 10A maksimum akım ve 15mOhm shunt direnci ile kalibrasyon
+        INA228_SetMaxCurrentShunt(&powerSensor, 10.0f, 0.015f);
 
-            CDC_Transmit_FS((uint8_t*)"SISTEM: 1/2 - Dara Aliniyor. Lutfen dokunmayin...\r\n", 51);
-            NAU7802_Tare(&loadcell_0, 20); // 20 örnekle sıfır noktasını bul
+        // Sürekli okuma modu aktif ediliyor
+        INA228_SetMode(&powerSensor, INA228_MODE_CONT_TEMP_BUS_SHUNT);
 
-            int len = sprintf(usb_buf, "SISTEM: Dara Tamam! Sifir Noktasi: %ld\r\n\r\n", loadcell_0.zero_offset);
-            CDC_Transmit_FS((uint8_t*)usb_buf, len);
-            HAL_Delay(1000);
-
-
-            // --- AŞAMA 2: KULLANICIDAN AĞIRLIK İSTEME ---
-            CDC_Transmit_FS((uint8_t*)"SISTEM: 2/2 - KALIBRASYON ASAMASI\r\n", 35);
-            CDC_Transmit_FS((uint8_t*)"Lutfen load cell uzerine 2KG (2000g) agirligi koyun.\r\n", 54);
-            CDC_Transmit_FS((uint8_t*)"10 Saniye icinde olcum baslayacak...\r\n", 39);
-
-            // Sen ağırlığı koyarken ve titreşimler biterken beklemesi için geri sayım
-            for(int i=10; i>0; i--) {
-                len = sprintf(usb_buf, "Kalan Sure: %d saniye\r\n", i);
-                CDC_Transmit_FS((uint8_t*)usb_buf, len);
-                HAL_GPIO_TogglePin(USER_LED_GPIO_Port, USER_LED_Pin);
-                HAL_Delay(1000);
-            }
-
-
-            // --- AŞAMA 3: OTOMATİK ÇARPAN HESAPLAMA ---
-            CDC_Transmit_FS((uint8_t*)"Olcum yapiliyor, lutfen masayi sallamayin...\r\n", 46);
-
-            // Kütüphaneye Diyoruz Ki: "Şu an üzerinde 2000.0 gram var, 20 örnek alıp kendi çarpanını hesapla!"
-            NAU7802_CalibrateFactor(&loadcell_0, 2000.0f, 20);
-
-            len = sprintf(usb_buf, "HARIKA! Kalibrasyon Carpani Hesaplandi: %.2f\r\n", loadcell_0.calibration_factor);
-            CDC_Transmit_FS((uint8_t*)usb_buf, len);
-            CDC_Transmit_FS((uint8_t*)"------------------------------------------------\r\n", 50);
-            HAL_Delay(2000);
-        }
+        strcpy(usb_buffer, "INA228 Baslatildi. Veriler okunuyor...\r\n");
+        CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
+    } else {
+        strcpy(usb_buffer, "HATA: INA228 ile I2C2 uzerinden iletisim kurulamadi!\r\n");
+        CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
     }
-
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  while(1){
   /* USER CODE BEGIN WHILE */
-	  // 1. Kanalın seçili olduğundan emin ol
-	        TCA9548_SelectChannel(&hi2c1, 0);
+    while (1)
+      {
+          // Eğer sensör bağlıysa verileri oku ve bas
+          if (INA228_IsConnected(&powerSensor)) {
+              float busVoltage = INA228_GetBusVoltage(&powerSensor);
+              float currentAmp = INA228_GetCurrent(&powerSensor);
+              float powerWatt  = INA228_GetPower(&powerSensor);
 
-	        // 2. Sensörde yeni bir okuma hazır mı?
-	        if (NAU7802_Available(&hi2c1)) {
+              // Verileri okunabilir bir formata çevir (snprintf, sprintf'in daha güvenli halidir)
+              snprintf(usb_buffer, sizeof(usb_buffer),
+                       "Bus Voltaj: %.3f V | Akim: %.3f A | Guc: %.3f W\r\n",
+                       busVoltage, currentAmp, powerWatt);
 
-	            // 3. Ham veriyi oku
-	            int32_t raw_adc = NAU7802_Read(&hi2c1);
-
-	            // 4. İŞTE EKSİK OLAN ADIM: Ham veriyi GRAMA ÇEVİR!
-	            float current_weight = NAU7802_CalculateWeight(&loadcell_0, raw_adc);
-
-	            // 5. USB'ye gram olarak bas (İstersen "Agirlik: " yazısını silip sadece "%.1f\r\n" yapabilirsin)
-	            int len = sprintf(usb_buf, "Agirlik: %.1f gram\r\n", current_weight);
-
-	            // 6. USB üzerinden gönder
-	            CDC_Transmit_FS((uint8_t *)usb_buf, len);
-	        }
-
-	        // Thrust Logger için okuma hızı
-	        HAL_Delay(50);
+              // Formatlanmış metni USB üzerinden gönder
+              CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
+          }
+          HAL_Delay(250); // Saniyede 4 okuma yapmak için 250ms bekleme
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+      }
   /* USER CODE END 3 */
-  }
 }
 
 /**
@@ -239,6 +200,37 @@ static void MX_I2C1_Init(void)
   }
   /* USER CODE BEGIN I2C1_Init 2 */
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.ClockSpeed = 100000;
+  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
