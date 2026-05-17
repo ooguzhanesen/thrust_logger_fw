@@ -1,0 +1,6 @@
+../Core/Src/application.c:24:13:App_BuzzerBeep	16	static
+../Core/Src/application.c:38:6:App_Init	16	static
+../Core/Src/application.c:67:6:App_ProcessUsbData	16	static
+../Core/Src/application.c:77:6:App_TaskUsbListen	16	static
+../Core/Src/application.c:88:13:App_ProcessCommand	56	static
+../Core/Src/application.c:145:6:App_TaskSensorRead	224	static

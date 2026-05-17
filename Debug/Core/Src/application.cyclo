@@ -1,0 +1,6 @@
+../Core/Src/application.c:24:13:App_BuzzerBeep	1
+../Core/Src/application.c:38:6:App_Init	2
+../Core/Src/application.c:67:6:App_ProcessUsbData	2
+../Core/Src/application.c:77:6:App_TaskUsbListen	2
+../Core/Src/application.c:88:13:App_ProcessCommand	11
+../Core/Src/application.c:145:6:App_TaskSensorRead	6

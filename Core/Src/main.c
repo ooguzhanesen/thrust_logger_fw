@@ -2,14 +2,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "ina228.h"
-#include "usbd_cdc_if.h"  // USB CDC üzerinden veri göndermek için gerekli başlık
-#include <stdio.h>
-#include <string.h>
+#include "application.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -30,6 +28,22 @@ I2C_HandleTypeDef hi2c2;
 
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim3;
+
+/* Definitions for Task_SensorRead */
+osThreadId_t Task_SensorReadHandle;
+const osThreadAttr_t Task_SensorRead_attributes = {
+  .name = "Task_SensorRead",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task_UsbListen */
+osThreadId_t Task_UsbListenHandle;
+const osThreadAttr_t Task_UsbListen_attributes = {
+  .name = "Task_UsbListen",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
 /* USER CODE BEGIN PV */
 INA228_HandleTypeDef powerSensor;
 char usb_buffer[128]; // USB üzerinden gönderilecek metni tutacak tampon bellek
@@ -41,6 +55,10 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
+static void MX_TIM3_Init(void);
+void StartTask_SensorRead(void *argument);
+void StartTask_UsbListen(void *argument);
+
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
@@ -74,51 +92,58 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USB_DEVICE_Init();
   MX_SPI1_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  // Thrust Logger sensörü başlatılıyor. (Adresin 0x40 olduğunu varsayıyoruz)
-    INA228_Init(&powerSensor, &hi2c2, 0x40);
-
-    // USB bağlantısının bilgisayar tarafından tanınması için kısa bir bekleme
-    HAL_Delay(1000);
-
-    if (INA228_Begin(&powerSensor)) {
-        // 10A maksimum akım ve 15mOhm shunt direnci ile kalibrasyon
-        INA228_SetMaxCurrentShunt(&powerSensor, 10.0f, 0.015f);
-
-        // Sürekli okuma modu aktif ediliyor
-        INA228_SetMode(&powerSensor, INA228_MODE_CONT_TEMP_BUS_SHUNT);
-
-        strcpy(usb_buffer, "INA228 Baslatildi. Veriler okunuyor...\r\n");
-        CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
-    } else {
-        strcpy(usb_buffer, "HATA: INA228 ile I2C2 uzerinden iletisim kurulamadi!\r\n");
-        CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
-    }
+  App_Init();
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of Task_SensorRead */
+  Task_SensorReadHandle = osThreadNew(StartTask_SensorRead, NULL, &Task_SensorRead_attributes);
+
+  /* creation of Task_UsbListen */
+  Task_UsbListenHandle = osThreadNew(StartTask_UsbListen, NULL, &Task_UsbListen_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
     while (1)
       {
-          // Eğer sensör bağlıysa verileri oku ve bas
-          if (INA228_IsConnected(&powerSensor)) {
-              float busVoltage = INA228_GetBusVoltage(&powerSensor);
-              float currentAmp = INA228_GetCurrent(&powerSensor);
-              float powerWatt  = INA228_GetPower(&powerSensor);
 
-              // Verileri okunabilir bir formata çevir (snprintf, sprintf'in daha güvenli halidir)
-              snprintf(usb_buffer, sizeof(usb_buffer),
-                       "Bus Voltaj: %.3f V | Akim: %.3f A | Guc: %.3f W\r\n",
-                       busVoltage, currentAmp, powerWatt);
-
-              // Formatlanmış metni USB üzerinden gönder
-              CDC_Transmit_FS((uint8_t*)usb_buffer, strlen(usb_buffer));
-          }
-          HAL_Delay(250); // Saniyede 4 okuma yapmak için 250ms bekleme
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -270,6 +295,65 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 71;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 19999;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 1000;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -332,6 +416,62 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartTask_SensorRead */
+/**
+  * @brief  Function implementing the Task_SensorRead thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartTask_SensorRead */
+void StartTask_SensorRead(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  App_TaskSensorRead(argument);
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTask_UsbListen */
+/**
+* @brief Function implementing the Task_UsbListen thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask_UsbListen */
+void StartTask_UsbListen(void *argument)
+{
+  /* USER CODE BEGIN StartTask_UsbListen */
+  /* Infinite loop */
+
+	App_TaskUsbListen(argument);
+
+  /* USER CODE END StartTask_UsbListen */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM1 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM1)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
