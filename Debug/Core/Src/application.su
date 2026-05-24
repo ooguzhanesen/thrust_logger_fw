@@ -1,6 +1,9 @@
-../Core/Src/application.c:24:13:App_BuzzerBeep	16	static
-../Core/Src/application.c:38:6:App_Init	16	static
-../Core/Src/application.c:67:6:App_ProcessUsbData	16	static
-../Core/Src/application.c:77:6:App_TaskUsbListen	16	static
-../Core/Src/application.c:88:13:App_ProcessCommand	56	static
-../Core/Src/application.c:145:6:App_TaskSensorRead	224	static
+../Core/Src/application.c:45:13:App_SendAck	24	static
+../Core/Src/application.c:54:13:App_BuzzerBeep	16	static
+../Core/Src/application.c:61:6:HAL_UART_RxCpltCallback	24	static
+../Core/Src/application.c:70:6:HAL_UART_ErrorCallback	32	static
+../Core/Src/application.c:80:6:App_Init	8	static
+../Core/Src/application.c:101:6:App_ProcessUsbData	16	static
+../Core/Src/application.c:110:6:App_TaskUsbListen	80	static
+../Core/Src/application.c:124:13:App_ProcessCommand	112	static
+../Core/Src/application.c:212:6:App_TaskSensorRead	368	static

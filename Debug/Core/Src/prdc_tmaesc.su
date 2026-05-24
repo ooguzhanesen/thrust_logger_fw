@@ -1,0 +1,7 @@
+../Core/Src/prdc_tmaesc.c:5:24:be16	16	static
+../Core/Src/prdc_tmaesc.c:25:16:temp_decode	24	static
+../Core/Src/prdc_tmaesc.c:41:6:TMAESC_ParseByte	24	static
+../Core/Src/prdc_tmaesc.c:90:6:TMAESC_Init	24	static
+../Core/Src/prdc_tmaesc.c:100:6:TMAESC_StartIT	16	static
+../Core/Src/prdc_tmaesc.c:107:6:TMAESC_OnRxCplt	16	static
+../Core/Src/prdc_tmaesc.c:115:6:TMAESC_TryGet	32	static,ignoring_inline_asm
